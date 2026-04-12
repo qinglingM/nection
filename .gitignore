@@ -1,0 +1,12 @@
+.DS_Store
+*.xcuserstate
+*.xcworkspace
+xcuserdata/
+Pods/
+Podfile.lock
+Carthage/Build
+DerivedData/
+.swiftpm/
+build/
+Align.xcodeproj/
+Align.xcworkspace/
