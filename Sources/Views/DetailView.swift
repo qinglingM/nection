@@ -3,6 +3,7 @@ import SwiftUI
 struct DetailView: View {
     let contact: Contact
     @StateObject private var store = ContactStore.shared
+    @StateObject private var userSettings = UserSettings.shared
     @State private var displayInfo: ContactDisplayInfo?
     @State private var showingEditContact = false
 
@@ -15,17 +16,55 @@ struct DetailView: View {
 
                 statusSection
 
-                workHoursSection
+                // 时钟可视化组件
+                VStack(spacing: 12) {
+                    ClockView(contact: contact)
+                        .frame(height: 140) // 控制时钟组件高度
+                }
+                .padding(.horizontal, 16)
+                
+                // Work Hours Display (Read-only)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("WORK HOURS")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(.white)
+                    
+                    VStack(spacing: 8) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("START")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Color(hex: "8E8E93"))
+                                
+                                Text(formatTime(contact.workStartTime))
+                                    .font(.system(size: 17, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            Spacer()
+                            
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("END")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Color(hex: "8E8E93"))
+                                
+                                Text(formatTime(contact.workEndTime))
+                                    .font(.system(size: 17, weight: .medium))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                    }
+                    .padding(16)
+                    .background(Color(hex: "2C2C2E"))
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(hex: "1C1C1E"))
 
                 suggestionSection
 
-                if let info = displayInfo {
-                    timeUntilSection(info: info)
-                }
-
                 notificationToggle
-
-                editButton
             }
             .padding(.vertical, 24)
         }
@@ -34,10 +73,12 @@ struct DetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Edit") {
+                Button {
                     showingEditContact = true
+                } label: {
+                    Image(systemName: "pencil")
+                        .foregroundColor(Color(hex: "64D2FF"))
                 }
-                .foregroundColor(Color(hex: "64D2FF"))
             }
         }
         .sheet(isPresented: $showingEditContact) {
@@ -64,17 +105,68 @@ struct DetailView: View {
     }
 
     private var bigTimeSection: some View {
-        VStack(spacing: 2) {
-            Text(displayInfo?.localTimeString ?? "--:--")
-                .font(.system(size: 96, weight: .thin))
-                .foregroundColor(.white)
-            
-            if let amPM = displayInfo?.amPM, !amPM.isEmpty {
-                Text(amPM)
-                    .font(.system(size: 24, weight: .light))
-                    .foregroundColor(Color(hex: "8E8E93"))
+        VStack(spacing: 8) {
+            // 联系人本地时间
+            VStack(spacing: 4) {
+                if let displayInfo = displayInfo {
+                    // 大时间
+                    let timeString = userSettings.getTimeOnly(displayInfo.localTime, timeZone: TimeZone(identifier: contact.timeZoneIdentifier) ?? TimeZone.current)
+                    Text(timeString)
+                        .font(.system(size: 96, weight: .thin))
+                        .foregroundColor(.white)
+                    
+                    // AM/PM显示在时间正下方（12小时制时）
+                    if !userSettings.is24HourFormat, !displayInfo.amPM.isEmpty {
+                        Text(displayInfo.amPM)
+                            .font(.system(size: 20, weight: .light))
+                            .foregroundColor(Color(hex: "8E8E93"))
+                    }
+                } else {
+                    Text("--:--")
+                        .font(.system(size: 96, weight: .thin))
+                        .foregroundColor(.white)
+                }
             }
+            
+            // 用户本地时间（被框起来的小标签）
+            HStack(spacing: 6) {
+                Image(systemName: "person.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(hex: "64D2FF"))
+                
+                Text("YOUR TIME")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(hex: "64D2FF"))
+                
+                Text(formatUserLocalTime())
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(hex: "2C2C2E"))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color(hex: "64D2FF").opacity(0.3), lineWidth: 1)
+                    )
+            )
         }
+    }
+    
+    private func formatUserLocalTime() -> String {
+        let now = Date()
+        let formatter = DateFormatter()
+        formatter.timeZone = TimeZone.current
+        
+        if UserSettings.shared.is24HourFormat {
+            formatter.dateFormat = "HH:mm"
+        } else {
+            formatter.dateFormat = "h:mm a"
+        }
+        
+        return formatter.string(from: now)
     }
 
     private var statusSection: some View {
@@ -131,6 +223,17 @@ struct DetailView: View {
                     var updated = currentContact
                     updated.notifyWhenWorkStarts = newValue
                     store.updateContact(updated)
+                    
+                    // 强绑定：开关状态与通知完全同步
+                    if newValue {
+                        // 开启开关 → 必须调度通知
+                        NotificationManager.shared.scheduleWorkStartNotification(for: updated)
+                        print("✅ DetailView: Notification scheduled for \(updated.name)")
+                    } else {
+                        // 关闭开关 → 必须取消通知
+                        NotificationManager.shared.cancelNotification(for: updated.id)
+                        print("🔕 DetailView: Notification cancelled for \(updated.name)")
+                    }
                 }
             ))
             .labelsHidden()
@@ -143,28 +246,21 @@ struct DetailView: View {
         .padding(.horizontal, 16)
     }
 
-    private var editButton: some View {
-        Button {
-            showingEditContact = true
-        } label: {
-            Text("Edit Contact")
-                .font(.system(size: 16))
-                .foregroundColor(Color(hex: "64D2FF"))
-                .frame(maxWidth: .infinity)
-                .frame(height: 44)
-                .background(Color(hex: "3A3A3C"))
-                .cornerRadius(10)
-        }
-        .padding(.horizontal, 16)
-    }
+
 
     private func statusColor(for status: WorkStatus) -> Color {
         switch status {
-        case .working: return Color(hex: "30D158")
-        case .beforeWork: return Color(hex: "64D2FF")
-        case .afterHours: return Color(hex: "98989D")
-        case .weekend: return Color(hex: "636366")
+        case .working: return Color(hex: "30D158")  // 绿色 - AVAILABLE
+        case .beforeWork: return Color(hex: "FF9500")  // 橙色 - OFF DUTY
+        case .afterHours: return Color(hex: "FF9500")  // 橙色 - OFF DUTY
+        case .weekend: return Color(hex: "FF3B30")  // 红色 - UNAVAILABLE
         }
+    }
+    
+    private func formatTime(_ components: DateComponents) -> String {
+        let hour = components.hour ?? 9
+        let minute = components.minute ?? 0
+        return String(format: "%02d:%02d", hour, minute)
     }
 
     private func refreshDisplayInfo() {
@@ -188,19 +284,19 @@ struct StatusBadgeLarge: View {
 
     var statusText: String {
         switch status {
-        case .working: return "Working now"
-        case .beforeWork: return "Before work"
-        case .afterHours: return "After hours"
-        case .weekend: return "Weekend"
+        case .working: return "AVAILABLE"
+        case .beforeWork: return "OFF DUTY"
+        case .afterHours: return "OFF DUTY"
+        case .weekend: return "UNAVAILABLE"
         }
     }
 
     var foregroundColor: Color {
         switch status {
-        case .working: return Color(hex: "30D158")
-        case .beforeWork: return Color(hex: "64D2FF")
-        case .afterHours: return Color(hex: "98989D")
-        case .weekend: return Color(hex: "636366")
+        case .working: return Color(hex: "30D158")  // 绿色 - AVAILABLE
+        case .beforeWork: return Color(hex: "FF9500")  // 橙色 - OFF DUTY
+        case .afterHours: return Color(hex: "FF9500")  // 橙色 - OFF DUTY
+        case .weekend: return Color(hex: "FF3B30")  // 红色 - UNAVAILABLE
         }
     }
 }

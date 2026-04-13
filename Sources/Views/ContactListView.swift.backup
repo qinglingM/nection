@@ -1,0 +1,355 @@
+import SwiftUI
+
+struct ContactListView: View {
+    @StateObject private var store = ContactStore.shared
+    @State private var showingAddContact = false
+    
+    var body: some View {
+        ZStack {
+            Color(hex: "1C1C1E")
+                .ignoresSafeArea()
+            
+            if store.sortedContacts().isEmpty {
+                emptyStateView
+            } else {
+                contactsListView
+            }
+        }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // 左侧：编辑按钮
+            ToolbarItem(placement: .navigationBarLeading) {
+                EditButton()
+                    .foregroundColor(Color(hex: "64D2FF"))
+            }
+            
+            // 中间：当前时间（与添加按钮水平高度）
+            ToolbarItem(placement: .principal) {
+                CurrentTimeInNavBar()
+            }
+            
+            // 右侧：添加按钮
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button {
+                    showingAddContact = true
+                } label: {
+                    Image(systemName: "plus")
+                        .foregroundColor(Color(hex: "64D2FF"))
+                }
+            }
+        }
+        .sheet(isPresented: $showingAddContact) {
+            AddContactView()
+        }
+    }
+    
+    private var emptyStateView: some View {
+        VStack(spacing: 20) {
+            Text("No Contacts")
+                .font(.system(size: 20, weight: .semibold))
+                .foregroundColor(.white)
+            
+            Text("Tap + to add your first contact")
+                .font(.system(size: 16))
+                .foregroundColor(Color(hex: "8E8E93"))
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+            
+            Button {
+                showingAddContact = true
+            } label: {
+                Text("Add Contact")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(Color(hex: "64D2FF"))
+                    .frame(width: 200, height: 44)
+                    .background(Color(hex: "3A3A3C"))
+                    .cornerRadius(12)
+            }
+            .padding(.top, 10)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(hex: "1C1C1E"))
+    }
+    
+    private var contactsListView: some View {
+        VStack(spacing: 0) {
+            // 移除顶部封面，时间已移到导航栏
+            
+            List {
+                ForEach(store.sortedContacts()) { contact in
+                    ZStack {
+                        // 卡片内容
+                        ContactCardViewFinal(contact: contact)
+                        
+                        // 透明的 NavigationLink，隐藏默认箭头
+                        NavigationLink(destination: DetailView(contact: contact)) {
+                            Color.clear
+                        }
+                        .opacity(0)
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    .listRowBackground(Color.clear)
+                    .listRowSeparator(.hidden)
+                    .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+                }
+                .onDelete(perform: deleteContacts)
+                .onMove(perform: moveContacts)
+            }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(Color(hex: "1C1C1E"))
+        }
+    }
+    
+    private func deleteContacts(at offsets: IndexSet) {
+        let sorted = store.sortedContacts()
+        offsets.map { sorted[$0] }.forEach { store.deleteContact($0) }
+    }
+    
+    private func moveContacts(from source: IndexSet, to destination: Int) {
+        store.moveContact(from: source, to: destination)
+    }
+}
+
+struct ContactCardViewFinal: View {
+    let contact: Contact
+    @State private var displayInfo: ContactDisplayInfo?
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            // 左侧信息
+            VStack(alignment: .leading, spacing: 8) {
+                // 名字
+                HStack {
+                    Text(contact.name)
+                        .font(.system(size: 24, weight: .semibold))
+                        .foregroundColor(.white)
+                    
+                    if contact.isPinned {
+                        Image(systemName: "pin.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(hex: "64D2FF"))
+                            .padding(.leading, 4)
+                    }
+                }
+                
+                Spacer()
+                
+                // 工作时间（如果有）
+                if contact.workHoursEnabled {
+                    Text("\(formatTime(contact.workStartTime)) - \(formatTime(contact.workEndTime))")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(hex: "636366"))
+                        .padding(.bottom, 2)
+                }
+                
+                // 地理信息（与右侧三态平齐的位置）
+                Text(displayInfo?.locationDisplay ?? "\(contact.country) · \(contact.city)")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(hex: "8E8E93"))
+            }
+            .frame(minHeight: 100) // 确保左侧有足够高度
+            
+            Spacer(minLength: 8)
+            
+            // 右侧时间、时区和状态
+            if contact.workHoursEnabled, let info = displayInfo {
+                VStack(alignment: .trailing, spacing: 4) {
+                    // 时间 + AM/PM
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        if !info.amPM.isEmpty {
+                            Text(info.amPM)
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(Color(hex: "8E8E93"))
+                        }
+                        
+                        Text(info.localTimeString)
+                            .font(.system(size: 64, weight: .light))
+                            .foregroundColor(.white)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                    }
+                    
+                    // GMT+时区信息（时间下方）
+                    Text(getGMTDisplay(contact.timeZoneIdentifier))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(hex: "8E8E93"))
+                    
+                    // 状态和评价 - 红绿灯三态
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(statusColor(for: info.status))
+                            .frame(width: 10, height: 10)
+                        
+                        Text(info.suggestion)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(statusColor(for: info.status))
+                    }
+                }
+            } else {
+                VStack(alignment: .trailing, spacing: 4) {
+                    // 时间 + AM/PM（工作时间关闭时）
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        if let displayInfo = displayInfo, !displayInfo.amPM.isEmpty {
+                            Text(displayInfo.amPM)
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundColor(Color(hex: "8E8E93"))
+                        }
+                        
+                        Text(displayInfo?.localTimeString ?? "--:--")
+                            .font(.system(size: 64, weight: .light))
+                            .foregroundColor(.white)
+                            .minimumScaleFactor(0.5)
+                            .lineLimit(1)
+                    }
+                    
+                    // GMT+时区信息
+                    if let timeZoneId = displayInfo?.contact.timeZoneIdentifier {
+                        Text(getGMTDisplay(timeZoneId))
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(Color(hex: "8E8E93"))
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(Color(hex: "3A3A3C"))
+        .cornerRadius(12)
+        .padding(.horizontal, 16)
+        .onAppear {
+            updateDisplayInfo()
+        }
+        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
+            updateDisplayInfo()
+        }
+    }
+    
+    private func updateDisplayInfo() {
+        displayInfo = TimeZoneManager.shared.getDisplayInfo(for: contact)
+    }
+    
+    private func formatTime(_ components: DateComponents) -> String {
+        let hour = components.hour ?? 9
+        let minute = components.minute ?? 0
+        return String(format: "%02d:%02d", hour, minute)
+    }
+    
+    private func statusColor(for status: WorkStatus) -> Color {
+        switch status {
+        case .working: return Color(hex: "30D158")
+        case .beforeWork: return Color(hex: "FF9500")
+        case .afterHours: return Color(hex: "FF9500")
+        case .weekend: return Color(hex: "FF3B30")
+        }
+    }
+    
+    private func getTimeZoneDisplay(_ timeZoneIdentifier: String) -> String {
+        let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? TimeZone.current
+        
+        // 简化的时区显示
+        if timeZoneIdentifier.contains("Shanghai") {
+            return "CST"
+        } else if timeZoneIdentifier.contains("New_York") {
+            return "EST"
+        } else if timeZoneIdentifier.contains("London") {
+            return "GMT"
+        } else if timeZoneIdentifier.contains("Tokyo") {
+            return "JST"
+        } else {
+            // 返回缩写或简化的标识符
+            let abbreviation = timeZone.abbreviation() ?? ""
+            if abbreviation.isEmpty {
+                // 从标识符中提取最后一部分
+                let parts = timeZoneIdentifier.split(separator: "/")
+                return String(parts.last?.prefix(3) ?? "UTC")
+            }
+            return abbreviation
+        }
+    }
+    
+    private func getGMTDisplay(_ timeZoneIdentifier: String) -> String {
+        let timeZone = TimeZone(identifier: timeZoneIdentifier) ?? TimeZone.current
+        let offset = timeZone.secondsFromGMT()
+        let hours = offset / 3600
+        
+        if hours == 0 {
+            return "GMT"
+        } else if hours > 0 {
+            return String(format: "GMT+%d", hours)
+        } else {
+            return String(format: "GMT%d", hours) // 负数会自动显示减号
+        }
+    }
+}
+
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: Double(a) / 255
+        )
+    }
+}
+
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(Color(hex: "8E8E93"))
+            
+            Text(formatTime(currentTime))
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+            
+            Text(getGMTDisplayForCurrent())
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(Color(hex: "8E8E93"))
+        }
+        .onReceive(timer) { _ in
+            currentTime = Date()
+        }
+    }
+    
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "h:mm"
+        return formatter.string(from: date)
+    }
+    
+    private func formatTimeWithPeriod(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.timeZone = TimeZone.current
+        formatter.dateFormat = "a"
+        return formatter.string(from: date).uppercased()
+    }
+    
+    private func getGMTDisplayForCurrent() -> String {
+        let timeZone = TimeZone.current
+        let offset = timeZone.secondsFromGMT()
+        let hours = offset / 3600
+        
+        if hours == 0 {
+            return "GMT"
+        } else if hours > 0 {
+            return String(format: "GMT+%d", hours)
+        } else {
+            return String(format: "GMT%d", hours)
+        }
+    }
+}

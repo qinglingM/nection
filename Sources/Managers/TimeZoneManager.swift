@@ -1,71 +1,53 @@
 import Foundation
-import Combine
 
-final class TimeZoneManager: ObservableObject {
+final class TimeZoneManager {
     static let shared = TimeZoneManager()
-
+    
     private init() {}
-
+    
     func getDisplayInfo(for contact: Contact) -> ContactDisplayInfo {
         let timeZone = TimeZone(identifier: contact.timeZoneIdentifier) ?? TimeZone.current
         let calendar = Calendar.current
         let now = Date()
-
-        let localTime = now
-        let localTimeString = formatTime(localTime, in: timeZone)
-        let amPM = formatTimeWithPeriod(localTime, in: timeZone)
-
-        let weekday = calendar.component(.weekday, from: now)
-        let isWeekend = weekday == 1 || weekday == 7
-
-        let workStartMinutes = (contact.workStartTime.hour ?? 9) * 60 + (contact.workStartTime.minute ?? 0)
-        let workEndMinutes = (contact.workEndTime.hour ?? 18) * 60 + (contact.workEndTime.minute ?? 0)
-
-        let currentMinutes = calendar.component(.hour, from: now) * 60 + calendar.component(.minute, from: now)
-
-        var status: WorkStatus
-        var suggestion: String
-        var timeUntilWorkStart: TimeInterval? = nil
-        var timeUntilWorkEnd: TimeInterval? = nil
-
-        if isWeekend {
-            status = .weekend
-            suggestion = "They're likely offline"
-        } else if currentMinutes < workStartMinutes {
-            status = .beforeWork
-            suggestion = "Wait until morning"
-
-            let todayWorkStart = calendar.date(bySettingHour: contact.workStartTime.hour ?? 9,
-                                                minute: contact.workStartTime.minute ?? 0,
-                                                second: 0,
-                                                of: now) ?? now
-            timeUntilWorkStart = todayWorkStart.timeIntervalSince(now)
-        } else if currentMinutes >= workEndMinutes {
-            status = .afterHours
-            suggestion = "Better to message later"
+        
+        // 转换当前时间到联系人时区
+        var contactCalendar = calendar
+        contactCalendar.timeZone = timeZone
+        let contactTime = now
+        
+        // 使用 UserSettings 格式化时间
+        let localTimeString: String
+        let amPM: String
+        
+        if UserSettings.shared.is24HourFormat {
+            // 24小时制：只返回时间，不返回AM/PM
+            localTimeString = UserSettings.shared.formatTime(contactTime, timeZone: timeZone)
+            amPM = ""
         } else {
-            status = .working
-            suggestion = "Good time to message"
-
-            let todayWorkEnd = calendar.date(bySettingHour: contact.workEndTime.hour ?? 18,
-                                              minute: contact.workEndTime.minute ?? 0,
-                                              second: 0,
-                                              of: now) ?? now
-            timeUntilWorkEnd = todayWorkEnd.timeIntervalSince(now)
+            // 12小时制：返回时间和AM/PM
+            localTimeString = UserSettings.shared.getTimeOnly(contactTime, timeZone: timeZone)
+            amPM = UserSettings.shared.getAMPM(contactTime, timeZone: timeZone)
         }
-
+        
+        // 确定状态
+        let status = determineWorkStatus(for: contact, at: contactTime, in: timeZone)
+        let suggestion = getSuggestion(for: status)
+        
+        // 位置显示
+        let locationDisplay = getLocationDisplay(for: contact)
+        
         return ContactDisplayInfo(
             contact: contact,
-            localTime: localTime,
+            localTime: contactTime,
             localTimeString: localTimeString,
             amPM: amPM,
             status: status,
             suggestion: suggestion,
-            timeUntilWorkStart: timeUntilWorkStart,
-            timeUntilWorkEnd: timeUntilWorkEnd
+            timeUntilWorkStart: nil,
+            timeUntilWorkEnd: nil
         )
     }
-
+    
     private func formatTime(_ date: Date, in timeZone: TimeZone) -> String {
         let formatter = DateFormatter()
         formatter.timeZone = timeZone
@@ -79,73 +61,81 @@ final class TimeZoneManager: ObservableObject {
         formatter.dateFormat = "a"
         return formatter.string(from: date).uppercased()
     }
+    
+    private func determineWorkStatus(for contact: Contact, at date: Date, in timeZone: TimeZone) -> WorkStatus {
+        guard contact.workHoursEnabled else {
+            return .weekend
+        }
+        
+        let calendar = Calendar.current
+        var contactCalendar = calendar
+        contactCalendar.timeZone = timeZone
+        
+        let components = contactCalendar.dateComponents([.hour, .minute, .weekday], from: date)
+        guard let hour = components.hour,
+              let minute = components.minute,
+              let weekday = components.weekday else {
+            return .weekend
+        }
+        
+        // 检查是否是周末
+        if weekday == 1 || weekday == 7 { // 1 = Sunday, 7 = Saturday
+            return .weekend
+        }
+        
+        let totalMinutes = hour * 60 + minute
+        
+        guard let workStartHour = contact.workStartTime.hour,
+              let workStartMinute = contact.workStartTime.minute,
+              let workEndHour = contact.workEndTime.hour,
+              let workEndMinute = contact.workEndTime.minute else {
+            return .weekend
+        }
+        
+        let workStartMinutes = workStartHour * 60 + workStartMinute
+        let workEndMinutes = workEndHour * 60 + workEndMinute
+        
+        // 三态逻辑
+        if totalMinutes >= 21 * 60 || totalMinutes < 6 * 60 {
+            // 21:00 - 6:00: UNAVAILABLE
+            return .weekend
+        } else if totalMinutes >= workStartMinutes && totalMinutes <= workEndMinutes {
+            // 工作时间: AVAILABLE
+            return .working
+        } else if totalMinutes < workStartMinutes {
+            // 工作时间前: OFF DUTY (before work)
+            return .beforeWork
+        } else {
+            // 工作时间后: OFF DUTY (after hours)
+            return .afterHours
+        }
+    }
+    
+    private func getSuggestion(for status: WorkStatus) -> String {
+        switch status {
+        case .working:
+            return "AVAILABLE"
+        case .beforeWork:
+            return "OFF DUTY"
+        case .afterHours:
+            return "OFF DUTY"
+        case .weekend:
+            return "UNAVAILABLE"
+        }
+    }
+    
+    private func getLocationDisplay(for contact: Contact) -> String {
+        var parts: [String] = []
+        
+        if !contact.country.isEmpty {
+            parts.append(contact.country)
+        }
+        
+        if !contact.city.isEmpty {
+            parts.append(contact.city)
+        }
+        
+        return parts.joined(separator: " · ")
+    }
 }
 
-final class ContactStore: ObservableObject {
-    static let shared = ContactStore()
-
-    @Published var contacts: [Contact] = []
-
-    private let userDefaultsKey = "stored_contacts"
-
-    private init() {
-        loadContacts()
-    }
-
-    func addContact(_ contact: Contact) {
-        var newContact = contact
-        newContact.sortOrder = contacts.count
-        contacts.append(newContact)
-        saveContacts()
-    }
-
-    func updateContact(_ contact: Contact) {
-        if let index = contacts.firstIndex(where: { $0.id == contact.id }) {
-            contacts[index] = contact
-            saveContacts()
-        }
-    }
-
-    func deleteContact(_ contact: Contact) {
-        contacts.removeAll { $0.id == contact.id }
-        saveContacts()
-    }
-
-    func moveContact(from source: IndexSet, to destination: Int) {
-        contacts.move(fromOffsets: source, toOffset: destination)
-        updateSortOrders()
-        saveContacts()
-    }
-
-    func togglePin(for contact: Contact) {
-        if let index = contacts.firstIndex(where: { $0.id == contact.id }) {
-            contacts[index].isPinned.toggle()
-            saveContacts()
-        }
-    }
-
-    func sortedContacts() -> [Contact] {
-        let pinned = contacts.filter { $0.isPinned }.sorted { $0.sortOrder < $1.sortOrder }
-        let unpinned = contacts.filter { !$0.isPinned }.sorted { $0.sortOrder < $1.sortOrder }
-        return pinned + unpinned
-    }
-
-    private func updateSortOrders() {
-        for (index, _) in contacts.enumerated() {
-            contacts[index].sortOrder = index
-        }
-    }
-
-    private func saveContacts() {
-        if let encoded = try? JSONEncoder().encode(contacts) {
-            UserDefaults.standard.set(encoded, forKey: userDefaultsKey)
-        }
-    }
-
-    private func loadContacts() {
-        if let data = UserDefaults.standard.data(forKey: userDefaultsKey),
-           let decoded = try? JSONDecoder().decode([Contact].self, from: data) {
-            contacts = decoded
-        }
-    }
-}

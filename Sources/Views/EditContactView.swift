@@ -9,12 +9,12 @@ struct EditContactView: View {
     @State private var country: String
     @State private var state: String
     @State private var city: String
-    @State private var selectedTimeZone: TimeZone
+    @State private var selectedTimeZone: TimeZone?
 
     @State private var workStartTime: Date
     @State private var workEndTime: Date
 
-    @State private var notifyWhenWorkStarts: Bool
+
     @State private var isPinned: Bool
 
     @State private var showingCountryPicker = false
@@ -28,13 +28,13 @@ struct EditContactView: View {
         _country = State(initialValue: contact.country)
         _state = State(initialValue: contact.state)
         _city = State(initialValue: contact.city)
-        _selectedTimeZone = State(initialValue: TimeZone(identifier: contact.timeZoneIdentifier) ?? TimeZone.current)
+        _selectedTimeZone = State(initialValue: TimeZone(identifier: contact.timeZoneIdentifier))
 
         let calendar = Calendar.current
         _workStartTime = State(initialValue: calendar.date(from: contact.workStartTime) ?? Date())
         _workEndTime = State(initialValue: calendar.date(from: contact.workEndTime) ?? Date())
 
-        _notifyWhenWorkStarts = State(initialValue: contact.notifyWhenWorkStarts)
+
         _isPinned = State(initialValue: contact.isPinned)
     }
 
@@ -91,7 +91,7 @@ struct EditContactView: View {
                             Text("Time Zone")
                                 .foregroundColor(Color(hex: "8E8E93"))
                             Spacer()
-                            Text(selectedTimeZone.identifier)
+                            Text(selectedTimeZone?.identifier ?? contact.timeZoneIdentifier)
                                 .foregroundColor(.white)
                         }
                     }
@@ -116,10 +116,6 @@ struct EditContactView: View {
                 .listRowBackground(Color(hex: "2C2C2E"))
 
                 Section {
-                    Toggle("Notify when work starts", isOn: $notifyWhenWorkStarts)
-                        .foregroundColor(.white)
-                        .tint(Color(hex: "30D158"))
-
                     Toggle("Pin contact", isOn: $isPinned)
                         .foregroundColor(.white)
                         .tint(Color(hex: "64D2FF"))
@@ -158,7 +154,7 @@ struct EditContactView: View {
                     .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showingCityPicker) {
-                CityPickerView(country: country, state: state, selectedCity: $city, selectedTimeZone: $selectedTimeZone)
+                CityInputPickerView(country: country, state: state, selectedCity: $city, selectedTimeZone: $selectedTimeZone)
                     .presentationDetents([.medium, .large])
                     .presentationDragIndicator(.visible)
             }
@@ -178,24 +174,26 @@ struct EditContactView: View {
         let calendar = Calendar.current
         let startComponents = calendar.dateComponents([.hour, .minute], from: workStartTime)
         let endComponents = calendar.dateComponents([.hour, .minute], from: workEndTime)
+        
+        // 调试信息
+        print("🔄 Saving contact: \(name)")
+        print("📅 Start time: \(workStartTime), Components: \(startComponents)")
+        print("📅 End time: \(workEndTime), Components: \(endComponents)")
+        print("🌍 Time zone: \(selectedTimeZone?.identifier ?? "nil"), using: \(selectedTimeZone?.identifier ?? contact.timeZoneIdentifier)")
 
         var updatedContact = contact
         updatedContact.name = name
         updatedContact.country = country
         updatedContact.state = state
         updatedContact.city = city
-        updatedContact.timeZoneIdentifier = selectedTimeZone.identifier
+        updatedContact.timeZoneIdentifier = selectedTimeZone?.identifier ?? contact.timeZoneIdentifier
         updatedContact.workStartTime = startComponents
         updatedContact.workEndTime = endComponents
-        updatedContact.notifyWhenWorkStarts = notifyWhenWorkStarts
         updatedContact.isPinned = isPinned
 
         store.updateContact(updatedContact)
-
-        NotificationManager.shared.cancelNotification(for: updatedContact.id)
-        if notifyWhenWorkStarts {
-            NotificationManager.shared.scheduleWorkStartNotification(for: updatedContact)
-        }
+        
+        print("✅ Contact saved successfully: \(updatedContact.name)")
 
         dismiss()
     }
@@ -210,7 +208,7 @@ struct EditContactView: View {
         timeZoneIdentifier: "Europe/London",
         workStartTime: DateComponents(hour: 9, minute: 0),
         workEndTime: DateComponents(hour: 18, minute: 0),
-        notifyWhenWorkStarts: true,
+
         isPinned: false
     ))
     .preferredColorScheme(.dark)
