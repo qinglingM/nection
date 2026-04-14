@@ -57,20 +57,7 @@ struct ClockView: View {
                     .fill(Color.white)
                     .frame(width: 8, height: 8)
 
-                // 数字时间显示
-                VStack(spacing: 4) {
-                    // 12小时制时才显示AM/PM
-                    if !userSettings.is24HourFormat {
-                        Text(formatTimeWithPeriod(currentTime))
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(Color(hex: "8E8E93"))
-                    }
-
-                    Text(userSettings.getTimeOnly(currentTime, timeZone: TimeZone(identifier: contact.timeZoneIdentifier) ?? TimeZone.current))
-                        .font(.system(size: 20, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                .offset(y: 40)
+                // 移除数字时间显示（避免重复）
             }
             .frame(height: 160)
 

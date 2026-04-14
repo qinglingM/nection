@@ -23,40 +23,57 @@ struct DetailView: View {
                 }
                 .padding(.horizontal, 16)
                 
-                // Work Hours Display (Read-only)
+                // Work Hours Toggle
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("WORK HOURS")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundColor(.white)
-                    
-                    VStack(spacing: 8) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("START")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(Color(hex: "8E8E93"))
-                                
-                                Text(formatTime(contact.workStartTime))
-                                    .font(.system(size: 17, weight: .medium))
-                                    .foregroundColor(.white)
+                    HStack {
+                        Text("WORK HOURS")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(.white)
+                        
+                        Spacer()
+                        
+                        Toggle("", isOn: Binding(
+                            get: { contact.workHoursEnabled },
+                            set: { newValue in
+                                var updated = contact
+                                updated.workHoursEnabled = newValue
+                                store.updateContact(updated)
                             }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text("END")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(Color(hex: "8E8E93"))
+                        ))
+                        .labelsHidden()
+                        .tint(Color(hex: "30D158"))
+                    }
+                    
+                    if contact.workHoursEnabled {
+                        VStack(spacing: 8) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("START")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(Color(hex: "8E8E93"))
+                                    
+                                    Text(formatTime(contact.workStartTime))
+                                        .font(.system(size: 17, weight: .medium))
+                                        .foregroundColor(.white)
+                                }
                                 
-                                Text(formatTime(contact.workEndTime))
-                                    .font(.system(size: 17, weight: .medium))
-                                    .foregroundColor(.white)
+                                Spacer()
+                                
+                                VStack(alignment: .trailing, spacing: 4) {
+                                    Text("END")
+                                        .font(.system(size: 13))
+                                        .foregroundColor(Color(hex: "8E8E93"))
+                                    
+                                    Text(formatTime(contact.workEndTime))
+                                        .font(.system(size: 17, weight: .medium))
+                                        .foregroundColor(.white)
+                                }
                             }
                         }
+                        .padding(16)
+                        .background(Color(hex: "2C2C2E"))
+                        .cornerRadius(12)
                     }
-                    .padding(16)
-                    .background(Color(hex: "2C2C2E"))
-                    .cornerRadius(12)
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)

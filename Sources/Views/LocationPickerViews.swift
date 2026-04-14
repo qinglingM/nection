@@ -7,85 +7,240 @@ struct CountryPickerView: View {
     @Binding var selectedCity: String
     @Binding var selectedTimeZone: TimeZone?
     @State private var searchText = ""
-    @State private var selectedContinent: String = "全部"
+    @State private var selectedContinent: String = "All"
     
-    let continents = ["全部", "亚洲", "欧洲", "北美洲", "南美洲", "非洲", "大洋洲"]
+    let continents = ["All", "Asia", "Europe", "North America", "South America", "Africa", "Oceania"]
     
     // 国家到大洲的映射
     let countryToContinent: [String: String] = [
         // 亚洲
-        "China": "亚洲",
-        "Japan": "亚洲",
-        "South Korea": "亚洲",
-        "Singapore": "亚洲",
-        "Malaysia": "亚洲",
-        "Thailand": "亚洲",
-        "Vietnam": "亚洲",
-        "India": "亚洲",
-        "Indonesia": "亚洲",
-        "Philippines": "亚洲",
-        "Turkey": "亚洲",
-        "United Arab Emirates": "亚洲",
-        "Saudi Arabia": "亚洲",
-        "Israel": "亚洲",
-        "Qatar": "亚洲",
+        "China": "Asia",
+        "Japan": "Asia",
+        "South Korea": "Asia",
+        "Singapore": "Asia",
+        "Malaysia": "Asia",
+        "Thailand": "Asia",
+        "Vietnam": "Asia",
+        "India": "Asia",
+        "Indonesia": "Asia",
+        "Philippines": "Asia",
+        "Turkey": "Asia",
+        "United Arab Emirates": "Asia",
+        "Saudi Arabia": "Asia",
+        "Israel": "Asia",
+        "Qatar": "Asia",
+        "Taiwan (China)": "Asia",
+        "Hong Kong (China)": "Asia",
+        "Macau (China)": "Asia",
+        "Pakistan": "Asia",
+        "Bangladesh": "Asia",
+        "Sri Lanka": "Asia",
+        "Nepal": "Asia",
+        "Iran": "Asia",
+        "Iraq": "Asia",
+        "Jordan": "Asia",
+        "Kuwait": "Asia",
+        "Lebanon": "Asia",
+        "Oman": "Asia",
+        "Syria": "Asia",
+        "Yemen": "Asia",
         
-        // 欧洲
-        "United Kingdom": "欧洲",
-        "Germany": "欧洲",
-        "France": "欧洲",
-        "Italy": "欧洲",
-        "Spain": "欧洲",
-        "Netherlands": "欧洲",
-        "Switzerland": "欧洲",
-        "Sweden": "欧洲",
-        "Norway": "欧洲",
-        "Denmark": "欧洲",
-        "Finland": "欧洲",
-        "Poland": "欧洲",
-        "Russia": "欧洲",
-        "Portugal": "欧洲",
-        "Austria": "欧洲",
-        "Belgium": "欧洲",
-        "Ireland": "欧洲",
+        // Europe
+        "United Kingdom": "Europe",
+        "Germany": "Europe",
+        "France": "Europe",
+        "Italy": "Europe",
+        "Spain": "Europe",
+        "Netherlands": "Europe",
+        "Switzerland": "Europe",
+        "Sweden": "Europe",
+        "Norway": "Europe",
+        "Denmark": "Europe",
+        "Finland": "Europe",
+        "Poland": "Europe",
+        "Russia": "Europe",
+        "Portugal": "Europe",
+        "Austria": "Europe",
+        "Belgium": "Europe",
+        "Ireland": "Europe",
+        "Ukraine": "Europe",
+        "Czech Republic": "Europe",
+        "Hungary": "Europe",
+        "Romania": "Europe",
+        "Greece": "Europe",
+        "Bulgaria": "Europe",
+        "Croatia": "Europe",
+        "Serbia": "Europe",
+        "Slovakia": "Europe",
+        "Slovenia": "Europe",
         
-        // 北美洲
-        "United States": "北美洲",
-        "Canada": "北美洲",
-        "Mexico": "北美洲",
+        // North America
+        "United States": "North America",
+        "Canada": "North America",
+        "Mexico": "North America",
+        "Cuba": "North America",
+        "Dominican Republic": "North America",
+        "Jamaica": "North America",
+        "Puerto Rico": "North America",
+        "Costa Rica": "North America",
+        "Panama": "North America",
         
-        // 南美洲
-        "Brazil": "南美洲",
-        "Argentina": "南美洲",
-        "Chile": "南美洲",
-        "Colombia": "南美洲",
-        "Peru": "南美洲",
-        "Venezuela": "南美洲",
+        // South America
+        "Brazil": "South America",
+        "Argentina": "South America",
+        "Chile": "South America",
+        "Colombia": "South America",
+        "Peru": "South America",
+        "Venezuela": "South America",
+        "Uruguay": "South America",
+        "Paraguay": "South America",
+        "Bolivia": "South America",
+        "Ecuador": "South America",
         
-        // 非洲
-        "South Africa": "非洲",
-        "Egypt": "非洲",
-        "Nigeria": "非洲",
-        "Kenya": "非洲",
-        "Morocco": "非洲",
+        // Africa
+        "South Africa": "Africa",
+        "Egypt": "Africa",
+        "Nigeria": "Africa",
+        "Kenya": "Africa",
+        "Morocco": "Africa",
+        "Algeria": "Africa",
+        "Angola": "Africa",
+        "Ethiopia": "Africa",
+        "Ghana": "Africa",
+        "Ivory Coast": "Africa",
+        "Tanzania": "Africa",
+        "Uganda": "Africa",
+        "Zambia": "Africa",
+        "Zimbabwe": "Africa",
         
-        // 大洋洲
-        "Australia": "大洋洲",
-        "New Zealand": "大洋洲"
+        // Oceania
+        "Australia": "Oceania",
+        "New Zealand": "Oceania",
+        "Fiji": "Oceania",
+        "Papua New Guinea": "Oceania"
+    ]
+    
+    // Country to timezone mapping (capital city timezone)
+    let countryToTimeZone: [String: String] = [
+        // Asia
+        "China": "Asia/Shanghai",
+        "Japan": "Asia/Tokyo",
+        "South Korea": "Asia/Seoul",
+        "Singapore": "Asia/Singapore",
+        "Malaysia": "Asia/Kuala_Lumpur",
+        "Thailand": "Asia/Bangkok",
+        "Vietnam": "Asia/Ho_Chi_Minh",
+        "India": "Asia/Kolkata",
+        "Indonesia": "Asia/Jakarta",
+        "Philippines": "Asia/Manila",
+        "Turkey": "Europe/Istanbul",
+        "United Arab Emirates": "Asia/Dubai",
+        "Saudi Arabia": "Asia/Riyadh",
+        "Israel": "Asia/Jerusalem",
+        "Qatar": "Asia/Qatar",
+        "Taiwan (China)": "Asia/Taipei",
+        "Hong Kong (China)": "Asia/Hong_Kong",
+        "Macau (China)": "Asia/Macau",
+        "Pakistan": "Asia/Karachi",
+        "Bangladesh": "Asia/Dhaka",
+        "Sri Lanka": "Asia/Colombo",
+        "Nepal": "Asia/Kathmandu",
+        "Iran": "Asia/Tehran",
+        "Iraq": "Asia/Baghdad",
+        "Jordan": "Asia/Amman",
+        "Kuwait": "Asia/Kuwait",
+        "Lebanon": "Asia/Beirut",
+        "Oman": "Asia/Muscat",
+        "Syria": "Asia/Damascus",
+        "Yemen": "Asia/Aden",
+        
+        // Europe
+        "United Kingdom": "Europe/London",
+        "Germany": "Europe/Berlin",
+        "France": "Europe/Paris",
+        "Italy": "Europe/Rome",
+        "Spain": "Europe/Madrid",
+        "Netherlands": "Europe/Amsterdam",
+        "Switzerland": "Europe/Zurich",
+        "Sweden": "Europe/Stockholm",
+        "Norway": "Europe/Oslo",
+        "Denmark": "Europe/Copenhagen",
+        "Finland": "Europe/Helsinki",
+        "Poland": "Europe/Warsaw",
+        "Russia": "Europe/Moscow",
+        "Portugal": "Europe/Lisbon",
+        "Austria": "Europe/Vienna",
+        "Belgium": "Europe/Brussels",
+        "Ireland": "Europe/Dublin",
+        "Ukraine": "Europe/Kiev",
+        "Czech Republic": "Europe/Prague",
+        "Hungary": "Europe/Budapest",
+        "Romania": "Europe/Bucharest",
+        "Greece": "Europe/Athens",
+        "Bulgaria": "Europe/Sofia",
+        "Croatia": "Europe/Zagreb",
+        "Serbia": "Europe/Belgrade",
+        "Slovakia": "Europe/Bratislava",
+        "Slovenia": "Europe/Ljubljana",
+        
+        // North America
+        "United States": "America/New_York",
+        "Canada": "America/Toronto",
+        "Mexico": "America/Mexico_City",
+        "Cuba": "America/Havana",
+        "Dominican Republic": "America/Santo_Domingo",
+        "Jamaica": "America/Jamaica",
+        "Puerto Rico": "America/Puerto_Rico",
+        "Costa Rica": "America/Costa_Rica",
+        "Panama": "America/Panama",
+        
+        // South America
+        "Brazil": "America/Sao_Paulo",
+        "Argentina": "America/Argentina/Buenos_Aires",
+        "Chile": "America/Santiago",
+        "Colombia": "America/Bogota",
+        "Peru": "America/Lima",
+        "Venezuela": "America/Caracas",
+        "Uruguay": "America/Montevideo",
+        "Paraguay": "America/Asuncion",
+        "Bolivia": "America/La_Paz",
+        "Ecuador": "America/Guayaquil",
+        
+        // Africa
+        "South Africa": "Africa/Johannesburg",
+        "Egypt": "Africa/Cairo",
+        "Nigeria": "Africa/Lagos",
+        "Kenya": "Africa/Nairobi",
+        "Morocco": "Africa/Casablanca",
+        "Algeria": "Africa/Algiers",
+        "Angola": "Africa/Luanda",
+        "Ethiopia": "Africa/Addis_Ababa",
+        "Ghana": "Africa/Accra",
+        "Ivory Coast": "Africa/Abidjan",
+        "Tanzania": "Africa/Dar_es_Salaam",
+        "Uganda": "Africa/Kampala",
+        "Zambia": "Africa/Lusaka",
+        "Zimbabwe": "Africa/Harare",
+        
+        // Oceania
+        "Australia": "Australia/Sydney",
+        "New Zealand": "Pacific/Auckland",
+        "Fiji": "Pacific/Fiji",
+        "Papua New Guinea": "Pacific/Port_Moresby"
     ]
     
     var filteredCountries: [String] {
-        let allCountries = getCountryNames()
+        let allCountries = countryToContinent.keys.sorted()
         var filtered = allCountries
         
-        // 按大洲筛选
-        if selectedContinent != "全部" {
+        // Filter by continent
+        if selectedContinent != "All" {
             filtered = filtered.filter { country in
                 countryToContinent[country] == selectedContinent
             }
         }
         
-        // 按搜索文本筛选
+        // Filter by search text
         if !searchText.isEmpty {
             filtered = filtered.filter { $0.localizedCaseInsensitiveContains(searchText) }
         }
@@ -130,7 +285,7 @@ struct CountryPickerView: View {
                             Image(systemName: "globe")
                                 .font(.system(size: 50))
                                 .foregroundColor(Color(hex: "8E8E93"))
-                            Text("未找到匹配的国家")
+                            Text("No matching countries found")
                                 .font(.system(size: 16))
                                 .foregroundColor(Color(hex: "8E8E93"))
                         }
@@ -142,8 +297,14 @@ struct CountryPickerView: View {
                                 selectedCountry = country
                                 selectedState = ""
                                 selectedCity = ""
-                                if let tz = getRecommendedTimeZone(for: country, city: "") {
-                                    selectedTimeZone = tz
+                                // Set timezone based on country
+                                if let timeZoneId = countryToTimeZone[country] {
+                                    selectedTimeZone = TimeZone(identifier: timeZoneId)
+                                } else {
+                                    // Fallback to getRecommendedTimeZone for countries in countriesData
+                                    if let tz = getRecommendedTimeZone(for: country, city: "") {
+                                        selectedTimeZone = tz
+                                    }
                                 }
                                 dismiss()
                             } label: {
@@ -177,13 +338,13 @@ struct CountryPickerView: View {
                 .scrollContentBackground(.hidden)
                 .background(Color(hex: "1C1C1E"))
             }
-            .searchable(text: $searchText, prompt: "搜索国家")
+            .searchable(text: $searchText, prompt: "Search countries")
             .tint(Color(hex: "64D2FF"))
-            .navigationTitle("选择国家")
+            .navigationTitle("Select Country")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("取消") {
+                    Button("Cancel") {
                         dismiss()
                     }
                     .foregroundColor(Color(hex: "64D2FF"))
@@ -236,7 +397,7 @@ struct StatePickerView: View {
             .background(Color(hex: "1C1C1E"))
             .searchable(text: $searchText, prompt: "Search")
             .tint(Color(hex: "64D2FF"))
-            .navigationTitle("选择州/省")
+            .navigationTitle("Select State/Province")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

@@ -433,7 +433,14 @@ let countriesData: [CountryData] = [
 ]
 
 func getCountryNames() -> [String] {
-    countriesData.map { $0.name }
+    // 从countriesData获取基础国家
+    let baseCountries = countriesData.map { $0.name }
+    
+    // 从LocationPickerViews的countryToContinent字典获取所有国家
+    // 注意：这里需要访问LocationPickerViews的countryToContinent
+    // 由于模块限制，我们暂时只返回baseCountries
+    // 实际应用中应该合并两个来源
+    return baseCountries.sorted()
 }
 
 func getStates(for country: String) -> [String] {

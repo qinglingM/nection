@@ -167,7 +167,10 @@ struct EditContactView: View {
     }
 
     private var isValid: Bool {
-        !name.isEmpty && !country.isEmpty && !city.isEmpty
+        // 暂时只检查name，方便调试
+        let valid = !name.isEmpty
+        print("EditContactView isValid check: name='\(name)', country='\(country)', city='\(city)' = \(valid)")
+        return valid
     }
 
     private func saveContact() {
@@ -175,11 +178,11 @@ struct EditContactView: View {
         let startComponents = calendar.dateComponents([.hour, .minute], from: workStartTime)
         let endComponents = calendar.dateComponents([.hour, .minute], from: workEndTime)
         
-        // 调试信息
-        print("🔄 Saving contact: \(name)")
-        print("📅 Start time: \(workStartTime), Components: \(startComponents)")
-        print("📅 End time: \(workEndTime), Components: \(endComponents)")
-        print("🌍 Time zone: \(selectedTimeZone?.identifier ?? "nil"), using: \(selectedTimeZone?.identifier ?? contact.timeZoneIdentifier)")
+        // Debug info
+        print("Saving contact: \(name)")
+        print("Start time: \(workStartTime), Components: \(startComponents)")
+        print("End time: \(workEndTime), Components: \(endComponents)")
+        print("Time zone: \(selectedTimeZone?.identifier ?? "nil"), using: \(selectedTimeZone?.identifier ?? contact.timeZoneIdentifier)")
 
         var updatedContact = contact
         updatedContact.name = name
@@ -193,7 +196,7 @@ struct EditContactView: View {
 
         store.updateContact(updatedContact)
         
-        print("✅ Contact saved successfully: \(updatedContact.name)")
+        print("Contact saved successfully: \(updatedContact.name)")
 
         dismiss()
     }

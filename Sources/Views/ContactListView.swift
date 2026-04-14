@@ -21,9 +21,9 @@ struct ContactListView: View {
         .background(Color(hex: "1C1C1E"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            // 左侧：编辑按钮和24小时制切换
+            // Left: Edit button and 24-hour format toggle
             ToolbarItemGroup(placement: .navigationBarLeading) {
-                // 编辑按钮（铅笔图标）
+                // Edit button (pencil icon)
                 Button {
                     isEditing.toggle()
                 } label: {
@@ -31,7 +31,7 @@ struct ContactListView: View {
                         .foregroundColor(Color(hex: "64D2FF"))
                 }
                 
-                // 24小时制切换按钮
+                // 24-hour format toggle button
                 Button {
                     UserSettings.shared.is24HourFormat.toggle()
                 } label: {
@@ -41,14 +41,14 @@ struct ContactListView: View {
                 }
             }
             
-            // 中间：当前时间（与添加按钮水平高度）
+            // Center: Current time (aligned with add button)
             ToolbarItem(placement: .principal) {
                 CurrentTimeInNavBar()
             }
             
-            // 右侧：添加按钮和提醒按钮
+            // Right: Add button and reminders button
             ToolbarItemGroup(placement: .navigationBarTrailing) {
-                // 提醒管理按钮
+                // Reminders management button
                 Button {
                     showingReminders = true
                 } label: {
@@ -56,7 +56,7 @@ struct ContactListView: View {
                         .foregroundColor(Color(hex: "FF9500"))
                 }
                 
-                // 添加联系人按钮
+                // Add contact button
                 Button {
                     showingAddContact = true
                 } label: {
@@ -114,12 +114,24 @@ struct ContactListView: View {
     private var contactsListView: some View {
         List {
             ForEach(store.sortedContacts()) { contact in
-                ContactCardViewFinal(contact: contact)
-                    .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
-                    .contentShape(Rectangle())
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                ZStack {
+                    NavigationLink(destination: DetailView(contact: contact)) {
+                        EmptyView()
+                    }
+                    .opacity(0)
+                    
+                    ContactCardViewFinal(contact: contact)
+                        .listRowInsets(EdgeInsets(
+                            top: 8,
+                            leading: UIDevice.current.userInterfaceIdiom == .pad ? 24 : 8,
+                            bottom: 8,
+                            trailing: UIDevice.current.userInterfaceIdiom == .pad ? 24 : 8
+                        ))
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                        .contentShape(Rectangle())
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         // 提醒按钮
                         Button {
                             toggleReminder(for: contact)
@@ -136,7 +148,7 @@ struct ContactListView: View {
                         }
                     }
             }
-            // 只在编辑模式下启用拖拽排序
+            // Enable drag sorting only in edit mode
             .onMove(perform: isEditing ? moveContacts : nil)
         }
         .environment(\.editMode, .constant(isEditing ? .active : .inactive))
@@ -200,7 +212,7 @@ struct ContactCardViewFinal: View {
                 // 名字
                 HStack {
                     Text(contact.name)
-                        .font(.system(size: 24, weight: .semibold))
+                        .font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 28 : 24, weight: .semibold))
                         .foregroundColor(.white)
                     
                     if contact.isPinned {
@@ -213,7 +225,7 @@ struct ContactCardViewFinal: View {
                 
                 Spacer()
                 
-                // 第一行：城市 + 州/府/省（如果有）
+                // First line: City + State/Province (if any)
                 if !contact.city.isEmpty || !contact.state.isEmpty {
                     let cityState = [contact.city, contact.state]
                         .filter { !$0.isEmpty }
@@ -224,14 +236,14 @@ struct ContactCardViewFinal: View {
                         .foregroundColor(Color(hex: "8E8E93"))
                 }
                 
-                // 第二行：国家
+                // Second line: Country
                 if !contact.country.isEmpty {
                     Text(contact.country)
                         .font(.system(size: 13))
                         .foregroundColor(Color(hex: "8E8E93"))
                 }
                 
-                // 第三行：工作时间（如果有）
+                // Third line: Work hours (if enabled)
                 if contact.workHoursEnabled {
                     Text("\(userSettings.formatTime(contact.workStartTime)) - \(userSettings.formatTime(contact.workEndTime))")
                         .font(.system(size: 11))
@@ -243,32 +255,32 @@ struct ContactCardViewFinal: View {
             
             Spacer(minLength: 8)
             
-            // 右侧时间、时区和状态
+            // Right side: Time, timezone and status
             if contact.workHoursEnabled, let info = displayInfo {
                 VStack(alignment: .trailing, spacing: 4) {
-                    // 时间显示（根据24小时制设置）
+                    // Time display (based on 24-hour format setting)
                     HStack(alignment: .lastTextBaseline, spacing: 4) {
-                        // 12小时制时才显示AM/PM
+                        // Show AM/PM only in 12-hour format
                         if !userSettings.is24HourFormat, !info.amPM.isEmpty {
                             Text(info.amPM)
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundColor(Color(hex: "8E8E93"))
                         }
                         
-                        // 使用 getTimeOnly 获取不带AM/PM的时间部分
+                        // Use getTimeOnly to get time without AM/PM
                         Text(userSettings.getTimeOnly(info.localTime, timeZone: TimeZone(identifier: contact.timeZoneIdentifier) ?? TimeZone.current))
-                            .font(.system(size: 64, weight: .light))
+                            .font(.system(size: UIDevice.current.userInterfaceIdiom == .pad ? 72 : 64, weight: .light))
                             .foregroundColor(.white)
                             .minimumScaleFactor(0.5)
                             .lineLimit(1)
                     }
                     
-                    // UTC时区信息（时间下方）
+                    // UTC timezone info (below time)
                     Text(getUTCDisplay(contact.timeZoneIdentifier))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(Color(hex: "8E8E93"))
                     
-                    // 状态和评价 - 红绿灯三态
+                    // Status and suggestion - traffic light three-state
                     HStack(spacing: 8) {
                         Circle()
                             .fill(statusColor(for: info.status))
@@ -281,9 +293,9 @@ struct ContactCardViewFinal: View {
                 }
             } else {
                 VStack(alignment: .trailing, spacing: 4) {
-                    // 时间显示（工作时间关闭时）
+                    // Time display (when work hours disabled)
                     HStack(alignment: .lastTextBaseline, spacing: 4) {
-                        // 12小时制时才显示AM/PM
+                        // Show AM/PM only in 12-hour format
                         if !userSettings.is24HourFormat,
                            let displayInfo = displayInfo,
                            !displayInfo.amPM.isEmpty {
@@ -307,7 +319,7 @@ struct ContactCardViewFinal: View {
                         }
                     }
                     
-                    // UTC时区信息
+                    // UTC timezone info
                     if let timeZoneId = displayInfo?.contact.timeZoneIdentifier {
                         Text(getUTCDisplay(timeZoneId))
                             .font(.system(size: 12, weight: .medium))
@@ -316,30 +328,29 @@ struct ContactCardViewFinal: View {
                 }
             }
             }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 16)
+            .padding(.vertical, UIDevice.current.userInterfaceIdiom == .pad ? 16 : 12)
+            .padding(.horizontal, UIDevice.current.userInterfaceIdiom == .pad ? 24 : 16)
             
-            // 底部进度条（与卡片底边重合）
+            // Bottom progress bar (aligned with card bottom edge)
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
-                    // 背景条（全灰，工作时间关闭时显示）
+                    // Background bar (full gray, shown when work hours disabled)
                     Rectangle()
                         .fill(Color(hex: "8E8E93"))
                         .frame(height: 2)
                         .opacity(0.3)
                     
-                    // 进度条
+                    // Progress bar
                     Rectangle()
                         .fill(progressColor)
                         .frame(width: geometry.size.width * workProgress, height: 2)
                 }
             }
-            .frame(height: 2) // 很扁的进度条
-            .offset(y: 1) // 微调，确保与卡片底边重合
+            .frame(height: 2) // Very thin progress bar
+            .offset(y: 1) // Fine-tune to align with card bottom edge
         }
         .background(Color(hex: "3A3A3C"))
         .cornerRadius(12)
-        .padding(.horizontal, 16)
         .onAppear {
             updateDisplayInfo()
             updateProgressBar()
@@ -377,7 +388,7 @@ struct ContactCardViewFinal: View {
         let hours = offset / 3600
         
         if hours == 0 {
-            return "UTC"
+            return "UTC+0"
         } else if hours > 0 {
             return String(format: "UTC+%d", hours)
         } else {

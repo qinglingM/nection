@@ -213,7 +213,7 @@ struct ReminderRow: View {
         let timeInterval = triggerDate.timeIntervalSince(now)
         
         if timeInterval <= 0 {
-            return "Now"
+            return "At Your Time"
         }
         
         let hours = Int(timeInterval) / 3600
@@ -333,8 +333,25 @@ struct ReminderRow: View {
                 }
             }
             
-            // 关闭按钮
-            Button(action: onDelete) {
+            // 关闭按钮（带确认）
+            Button(action: {
+                // 显示确认对话框
+                let alert = UIAlertController(
+                    title: "Cancel Reminder",
+                    message: "Are you sure you want to cancel this reminder?",
+                    preferredStyle: .alert
+                )
+                alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
+                alert.addAction(UIAlertAction(title: "Confirm", style: .destructive) { _ in
+                    onDelete()
+                })
+                
+                // 显示对话框
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootViewController = windowScene.windows.first?.rootViewController {
+                    rootViewController.present(alert, animated: true)
+                }
+            }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 22))
                     .foregroundColor(Color(hex: "FF3B30"))

@@ -19,14 +19,14 @@ class ContactStore: ObservableObject {
     }
     
     func updateContact(_ contact: Contact) {
-        print("🔄 ContactStore: Updating contact \(contact.name) (ID: \(contact.id))")
+        print("ContactStore: Updating contact \(contact.name) (ID: \(contact.id))")
         
         if let index = contacts.firstIndex(where: { $0.id == contact.id }) {
             contacts[index] = contact
             saveContacts()
-            print("✅ ContactStore: Contact updated successfully")
+            print("ContactStore: Contact updated successfully")
         } else {
-            print("❌ ContactStore: Contact not found for update")
+            print("ContactStore: Contact not found for update")
         }
     }
     
@@ -48,7 +48,7 @@ class ContactStore: ObservableObject {
         var sorted = sortedContacts()
         sorted.move(fromOffsets: source, toOffset: destination)
         
-        // 更新排序顺序
+        // Update sort order
         for (index, contact) in sorted.enumerated() {
             if let originalIndex = contacts.firstIndex(where: { $0.id == contact.id }) {
                 var updatedContact = contacts[originalIndex]
@@ -62,7 +62,7 @@ class ContactStore: ObservableObject {
     }
     
     func reorderContacts(to newOrder: [Contact]) {
-        // 更新所有联系人的排序顺序
+        // Update sort order for all contacts
         for (index, contact) in newOrder.enumerated() {
             if let originalIndex = contacts.firstIndex(where: { $0.id == contact.id }) {
                 var updatedContact = contacts[originalIndex]
@@ -76,22 +76,22 @@ class ContactStore: ObservableObject {
     }
     
     private func saveContacts() {
-        print("💾 ContactStore: Saving \(contacts.count) contacts")
+        print("ContactStore: Saving \(contacts.count) contacts")
         
         do {
             let encoded = try JSONEncoder().encode(contacts)
             UserDefaults.standard.set(encoded, forKey: saveKey)
-            print("✅ ContactStore: Saved successfully to UserDefaults")
+            print("ContactStore: Saved successfully to UserDefaults")
         } catch {
-            print("❌ ContactStore: Failed to encode contacts: \(error)")
-            print("📋 Contacts data: \(contacts)")
+            print("ContactStore: Failed to encode contacts: \(error)")
+            print("Contacts data: \(contacts)")
         }
     }
     
     private func loadContacts() {
         guard let data = UserDefaults.standard.data(forKey: saveKey),
               let decoded = try? JSONDecoder().decode([Contact].self, from: data) else {
-            // 如果没有保存的数据，创建一些示例数据
+            // If no saved data, create some sample contacts
             createSampleContacts()
             return
         }
@@ -99,10 +99,10 @@ class ContactStore: ObservableObject {
     }
     
     private func createSampleContacts() {
-        // 创建一些示例联系人
+        // Create some sample contacts
         let sampleContacts = [
             Contact(
-                name: "纽约同事",
+                name: "New York Colleague",
                 country: "United States",
                 state: "New York",
                 city: "New York",
@@ -112,7 +112,7 @@ class ContactStore: ObservableObject {
                 isPinned: true
             ),
             Contact(
-                name: "伦敦伙伴",
+                name: "London Partner",
                 country: "United Kingdom",
                 state: "England",
                 city: "London",
@@ -121,7 +121,7 @@ class ContactStore: ObservableObject {
                 workEndTime: DateComponents(hour: 17, minute: 0)
             ),
             Contact(
-                name: "东京客户",
+                name: "Tokyo Client",
                 country: "Japan",
                 state: "Tokyo",
                 city: "Tokyo",

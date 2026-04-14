@@ -10,7 +10,7 @@ final class TimeZoneManager {
         let calendar = Calendar.current
         let now = Date()
         
-        // 转换当前时间到联系人时区
+        // Convert current time to contact's timezone
         var contactCalendar = calendar
         contactCalendar.timeZone = timeZone
         let contactTime = now
