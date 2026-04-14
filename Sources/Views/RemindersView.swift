@@ -41,6 +41,13 @@ struct RemindersView: View {
             .onAppear {
                 loadPendingNotifications()
             }
+            .onChange(of: store.contacts) { _ in
+                // 当联系人数据变化时，重新加载通知
+                print("📊 Contact store changed, reloading notifications in 0.5s...")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    loadPendingNotifications()
+                }
+            }
             .alert("Mute Today's Reminders", isPresented: $showingClearAllAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Mute Today", role: .destructive) {
@@ -85,7 +92,8 @@ struct RemindersView: View {
     
     private var remindersListView: some View {
         List {
-            ForEach(pendingNotifications, id: \.identifier) { notification in
+            // 先显示置顶联系人的提醒，然后显示非置顶的
+            ForEach(sortedNotifications(), id: \.identifier) { notification in
                 ReminderRow(
                     notification: notification,
                     onDelete: {
@@ -102,36 +110,91 @@ struct RemindersView: View {
         .background(Color(hex: "1C1C1E"))
     }
     
-    private func loadPendingNotifications() {
-        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-            DispatchQueue.main.async {
-                // 只显示工作开始提醒
-                self.pendingNotifications = requests.filter { request in
-                    request.content.title.contains("has started work")
+    // 排序通知：置顶联系人优先
+    private func sortedNotifications() -> [UNNotificationRequest] {
+        return pendingNotifications.sorted { notification1, notification2 in
+            // 从通知标识符中提取联系人ID
+            let id1 = notification1.identifier.replacingOccurrences(of: "work_start_", with: "")
+            let id2 = notification2.identifier.replacingOccurrences(of: "work_start_", with: "")
+            
+            guard let uuid1 = UUID(uuidString: id1),
+                  let uuid2 = UUID(uuidString: id2) else {
+                return false
+            }
+            
+            // 查找联系人
+            let contact1 = store.contacts.first { $0.id == uuid1 }
+            let contact2 = store.contacts.first { $0.id == uuid2 }
+            
+            // 置顶的优先
+            if let pinned1 = contact1?.isPinned, let pinned2 = contact2?.isPinned {
+                if pinned1 != pinned2 {
+                    return pinned1 // 置顶的排前面
                 }
-                print("Loaded \(self.pendingNotifications.count) reminders")
+            }
+            
+            // 然后按名字排序
+            let name1 = contact1?.name ?? ""
+            let name2 = contact2?.name ?? ""
+            return name1 < name2
+        }
+    }
+    
+    private func loadPendingNotifications() {
+        print("🔄 Loading pending notifications...")
+        
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            print("📋 System has \(requests.count) total notifications")
+            
+            let workStartNotifications = requests.filter { request in
+                request.content.title.contains("has started work")
+            }
+            
+            print("🔔 Found \(workStartNotifications.count) work start reminders")
+            for notification in workStartNotifications {
+                print("  - \(notification.identifier): \(notification.content.title)")
+            }
+            
+            DispatchQueue.main.async {
+                self.pendingNotifications = workStartNotifications
+                print("✅ Loaded \(self.pendingNotifications.count) reminders into UI")
             }
         }
     }
     
     private func cancelReminder(_ identifier: String) {
+        print("🔄 cancelReminder called with identifier: \(identifier)")
+        
         // 从通知标识符中提取联系人ID
         let contactId = identifier.replacingOccurrences(of: "work_start_", with: "")
+        print("  - Extracted contactId: \(contactId)")
         
         // 取消通知
+        print("  - Removing notification from system...")
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
         
-        // 强绑定：通知里关掉 = 卡片详情的开关被关掉
-        if let uuid = UUID(uuidString: contactId),
-           let contact = store.contacts.first(where: { $0.id == uuid }) {
-            var updatedContact = contact
-            updatedContact.notifyWhenWorkStarts = false
-            store.updateContact(updatedContact)
-            print("🔕 RemindersView: Notification cancelled and switch turned off for \(updatedContact.name)")
+        // 核心同步：通知里关掉 = 卡片详情的开关被关掉
+        if let uuid = UUID(uuidString: contactId) {
+            print("  - Parsed UUID: \(uuid)")
+            
+            if let contact = store.contacts.first(where: { $0.id == uuid }) {
+                print("  - Found contact: \(contact.name)")
+                
+                var updatedContact = contact
+                updatedContact.notifyWhenWorkStarts = false
+                store.updateContact(updatedContact)
+                print("✅ RemindersView: Notification cancelled and switch turned off for \(updatedContact.name)")
+            } else {
+                print("⚠️ Contact not found in store for UUID: \(uuid)")
+                print("  - Available contacts: \(store.contacts.map { "\($0.name): \($0.id)" })")
+            }
+        } else {
+            print("❌ Failed to parse UUID from: \(contactId)")
         }
         
         // 更新列表
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+        print("  - Reloading notifications in 0.5s...")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             loadPendingNotifications()
         }
     }
@@ -202,27 +265,70 @@ struct ReminderRow: View {
         return String(format: "%02d:%02d", hour, minute)
     }
     
-    // 计算倒计时
+    // 计算倒计时（每日提醒，永远不会超过24小时）
     private var countdownText: String {
-        guard let trigger = notification.trigger as? UNCalendarNotificationTrigger,
-              let triggerDate = Calendar.current.date(from: trigger.dateComponents) else {
+        guard let trigger = notification.trigger as? UNCalendarNotificationTrigger else {
             return ""
         }
         
         let now = Date()
-        let timeInterval = triggerDate.timeIntervalSince(now)
+        let calendar = Calendar.current
         
-        if timeInterval <= 0 {
-            return "At Your Time"
+        // 关键：每日重复提醒，总是计算下一个提醒时间
+        // 获取触发时间的小时和分钟
+        let triggerHour = trigger.dateComponents.hour ?? 9
+        let triggerMinute = trigger.dateComponents.minute ?? 0
+        let triggerTimeZone = trigger.dateComponents.timeZone ?? TimeZone.current
+        
+        // 在触发器时区中计算
+        var components = calendar.dateComponents(in: triggerTimeZone, from: now)
+        components.hour = triggerHour
+        components.minute = triggerMinute
+        components.second = 0
+        
+        guard let todayAlarm = calendar.date(from: components) else {
+            return ""
         }
         
-        let hours = Int(timeInterval) / 3600
-        let minutes = (Int(timeInterval) % 3600) / 60
+        // 计算下一个提醒时间
+        let nextAlarm: Date
+        if now < todayAlarm {
+            // 今天的提醒还没到
+            nextAlarm = todayAlarm
+        } else {
+            // 今天的提醒已过，计算明天的
+            guard let tomorrowAlarm = calendar.date(byAdding: .day, value: 1, to: todayAlarm) else {
+                return ""
+            }
+            nextAlarm = tomorrowAlarm
+        }
+        
+        let timeInterval = nextAlarm.timeIntervalSince(now)
+        
+        // 验证：每日提醒永远不会超过24小时
+        let totalHours = timeInterval / 3600
+        if totalHours >= 24 {
+            print("❌ LOGIC ERROR: Daily reminder shows \(String(format: "%.1f", totalHours))h!")
+            print("  - Trigger: \(triggerHour):\(triggerMinute) in \(triggerTimeZone.identifier)")
+            print("  - Now: \(now) in current timezone")
+            print("  - Today alarm: \(todayAlarm)")
+            print("  - Next alarm: \(nextAlarm)")
+            print("  - This should never happen for daily reminders!")
+            return "Error" // 显示错误，让我们知道有问题
+        }
+        
+        if timeInterval <= 60 { // 1分钟内
+            return "Now"
+        }
+        
+        let totalMinutes = Int(timeInterval) / 60
+        let hours = totalMinutes / 60
+        let minutes = totalMinutes % 60
         
         if hours > 0 {
             return String(format: "%dh %02dm", hours, minutes)
         } else {
-            return String(format: "%02dm", minutes)
+            return String(format: "%dm", minutes)
         }
     }
     
@@ -245,15 +351,40 @@ struct ReminderRow: View {
         }
     }
     
-    // 获取闹铃时间（转换为用户本地时间）
+    // 获取闹铃时间（用户本地时间，显示下一个提醒时间）
     private func getAlarmTimeInUserTimeZone() -> String? {
-        guard let trigger = notification.trigger as? UNCalendarNotificationTrigger,
-              let triggerDate = Calendar.current.date(from: trigger.dateComponents) else {
+        guard let trigger = notification.trigger as? UNCalendarNotificationTrigger else {
             return nil
         }
         
-        // 将触发时间转换为用户本地时间
+        let now = Date()
+        let calendar = Calendar.current
         let userTimeZone = TimeZone.current
+        
+        // 获取今天这个时间
+        var todayComponents = calendar.dateComponents(in: userTimeZone, from: now)
+        todayComponents.hour = trigger.dateComponents.hour ?? 9
+        todayComponents.minute = trigger.dateComponents.minute ?? 0
+        todayComponents.second = 0
+        
+        guard let todayAlarm = calendar.date(from: todayComponents) else {
+            return nil
+        }
+        
+        // 计算下一个提醒时间
+        let nextAlarm: Date
+        if now < todayAlarm {
+            // 今天的提醒还没到
+            nextAlarm = todayAlarm
+        } else {
+            // 今天的提醒已过，计算明天的
+            guard let tomorrowAlarm = calendar.date(byAdding: .day, value: 1, to: todayAlarm) else {
+                return nil
+            }
+            nextAlarm = tomorrowAlarm
+        }
+        
+        // 格式化显示
         let formatter = DateFormatter()
         formatter.timeZone = userTimeZone
         
@@ -263,7 +394,7 @@ struct ReminderRow: View {
             formatter.dateFormat = "h:mm a"
         }
         
-        return formatter.string(from: triggerDate)
+        return formatter.string(from: nextAlarm)
     }
     
     var body: some View {
@@ -301,64 +432,72 @@ struct ReminderRow: View {
             
             Spacer()
             
-            VStack(alignment: .trailing, spacing: 6) {
-                // 倒计时显示
+            VStack(alignment: .trailing, spacing: 8) {
+                // 倒计时显示 - 统一大小
                 if !countdownText.isEmpty {
-                    Text(countdownText)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: "64D2FF"))
+                    VStack(spacing: 2) {
+                        Text("Countdown")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(hex: "64D2FF"))
+                        
+                        Text(countdownText)
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(Color(hex: "64D2FF"))
+                    }
+                    .frame(minWidth: 70) // 统一最小宽度
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color(hex: "2C2C2E"))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(hex: "64D2FF").opacity(0.3), lineWidth: 1)
+                            )
+                    )
                 }
                 
-                // 闹铃时间（用户本地时间）
+                // 闹铃时间（用户本地时间）- 统一大小
                 if let alarmTime = getAlarmTimeInUserTimeZone() {
-                    HStack(spacing: 4) {
-                        Image(systemName: "alarm.fill")
-                            .font(.system(size: 10))
+                    VStack(spacing: 2) {
+                        Text("My Alarm")
+                            .font(.system(size: 10, weight: .medium))
                             .foregroundColor(Color(hex: "FF9500"))
                         
                         Text(alarmTime)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(size: 14, weight: .bold))
                             .foregroundColor(.white)
                     }
+                    .frame(minWidth: 70) // 统一最小宽度
                     .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.vertical, 6)
                     .background(
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: 8)
                             .fill(Color(hex: "2C2C2E"))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .stroke(Color(hex: "FF9500").opacity(0.3), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color(hex: "FF9500").opacity(0.4), lineWidth: 1.5)
                             )
                     )
                 }
             }
             
-            // 关闭按钮（带确认）
+            // 关闭按钮（直接执行）
             Button(action: {
-                // 显示确认对话框
-                let alert = UIAlertController(
-                    title: "Cancel Reminder",
-                    message: "Are you sure you want to cancel this reminder?",
-                    preferredStyle: .alert
-                )
-                alert.addAction(UIAlertAction(title: "Cancel", style: .cancel))
-                alert.addAction(UIAlertAction(title: "Confirm", style: .destructive) { _ in
-                    onDelete()
-                })
-                
-                // 显示对话框
-                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                   let rootViewController = windowScene.windows.first?.rootViewController {
-                    rootViewController.present(alert, animated: true)
-                }
+                print("🟡 X button tapped - Step 1: Button action triggered")
+                print("  - Notification ID: \(notification.identifier)")
+                print("  - Contact name from title: \(contactName)")
+                onDelete()
+                print("🟢 X button tapped - Step 2: onDelete callback executed")
             }) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 22))
                     .foregroundColor(Color(hex: "FF3B30"))
             }
             .buttonStyle(PlainButtonStyle())
+            .contentShape(Rectangle()) // 确保整个区域可点击
         }
-        .padding(.vertical, 12)
+        .padding(.vertical, 14)
         .padding(.horizontal, 16)
         .background(Color(hex: "3A3A3C"))
         .cornerRadius(12)

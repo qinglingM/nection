@@ -31,8 +31,15 @@ class ContactStore: ObservableObject {
     }
     
     func deleteContact(_ contact: Contact) {
+        print("🗑️ Deleting contact: \(contact.name) (ID: \(contact.id))")
+        
+        // 删除对应的提醒
+        NotificationManager.shared.cancelNotification(for: contact.id)
+        
         contacts.removeAll { $0.id == contact.id }
         saveContacts()
+        
+        print("✅ Contact deleted, remaining contacts: \(contacts.count)")
     }
     
     func sortedContacts() -> [Contact] {

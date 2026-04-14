@@ -111,7 +111,20 @@ final class NotificationManager: ObservableObject {
     }
 
     func cancelNotification(for contactId: UUID) {
-        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["work_start_\(contactId.uuidString)"])
+        let identifier = "work_start_\(contactId.uuidString)"
+        print("🔕 Cancelling notification with identifier: \(identifier)")
+        
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [identifier])
+        
+        // 验证是否真的删除了
+        UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
+            let remaining = requests.filter { $0.identifier == identifier }
+            if remaining.isEmpty {
+                print("✅ Notification cancelled successfully")
+            } else {
+                print("❌ Notification still exists after cancellation")
+            }
+        }
     }
 
     func cancelAllNotifications() {
