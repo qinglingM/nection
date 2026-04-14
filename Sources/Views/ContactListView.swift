@@ -18,7 +18,7 @@ struct ContactListView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(hex: "1C1C1E"))
+        .background(Color.black)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // Left: Edit button and 24-hour format toggle
@@ -108,7 +108,7 @@ struct ContactListView: View {
             .padding(.top, 10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(hex: "1C1C1E"))
+        .background(Color.black)
     }
     
     private var contactsListView: some View {
@@ -122,9 +122,9 @@ struct ContactListView: View {
                     
                     ContactCardViewFinal(contact: contact)
                         .listRowInsets(EdgeInsets(
-                            top: 8,
+                            top: 4,  // 顶部小间隔
                             leading: UIDevice.current.userInterfaceIdiom == .pad ? 24 : 8,
-                            bottom: 8,
+                            bottom: 4,  // 底部小间隔
                             trailing: UIDevice.current.userInterfaceIdiom == .pad ? 24 : 8
                         ))
                         .listRowBackground(Color.clear)
@@ -154,7 +154,7 @@ struct ContactListView: View {
         .environment(\.editMode, .constant(isEditing ? .active : .inactive))
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(Color(hex: "1C1C1E"))
+        .background(Color.black)
     }
     
     private func deleteContact(_ contact: Contact) {
@@ -261,7 +261,7 @@ struct ContactCardViewFinal: View {
                     // Time display (based on 24-hour format setting)
                     HStack(alignment: .lastTextBaseline, spacing: 4) {
                         // Show AM/PM only in 12-hour format
-                        if !userSettings.is24HourFormat, !info.amPM.isEmpty {
+                        if !userSettings.is24HourFormat {
                             Text(info.amPM)
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundColor(Color(hex: "8E8E93"))
@@ -297,8 +297,7 @@ struct ContactCardViewFinal: View {
                     HStack(alignment: .lastTextBaseline, spacing: 4) {
                         // Show AM/PM only in 12-hour format
                         if !userSettings.is24HourFormat,
-                           let displayInfo = displayInfo,
-                           !displayInfo.amPM.isEmpty {
+                           let displayInfo = displayInfo {
                             Text(displayInfo.amPM)
                                 .font(.system(size: 18, weight: .medium))
                                 .foregroundColor(Color(hex: "8E8E93"))
@@ -349,8 +348,12 @@ struct ContactCardViewFinal: View {
             .frame(height: 2) // Very thin progress bar
             .offset(y: 1) // Fine-tune to align with card bottom edge
         }
-        .background(Color(hex: "3A3A3C"))
+        .background(Color(hex: "1C1C1E"))
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(hex: "3A3A3C"), lineWidth: 1)
+        )
         .onAppear {
             updateDisplayInfo()
             updateProgressBar()
